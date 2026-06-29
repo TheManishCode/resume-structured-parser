@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/role_taxonomy.py
 
 Role-relevance scorer for the Senior AI Engineer (Search/Ranking) JD.
@@ -47,7 +47,7 @@ Normalization calibration (probe_desc_calibrate.py, 2,556 ML roles):
 from __future__ import annotations
 import math
 from datetime import date
-import schema
+from . import schema
 
 # ── Title tiers derived directly from JD ideal-candidate profile ─────────────
 

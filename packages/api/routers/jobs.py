@@ -184,7 +184,16 @@ async def _get_own_job(job_id: str, recruiter_id: str, db) -> Job:
 
 
 async def _enforce_cloud_cap(recruiter_id: str, db) -> None:
-    from datetime import date
-    rec = await db.get(type("Recruiter", (), {}), recruiter_id)
-    # Minimal check — full implementation in services/quota.py
-    pass
+    from datetime import date as _date
+    from packages.core.db.models import Recruiter
+    rec = await db.get(Recruiter, recruiter_id)
+    if not rec:
+        return
+    today = _date.today()
+    if rec.cap_reset_date != today:
+        rec.cloud_calls_today = 0
+        rec.cap_reset_date = today
+    if rec.cloud_calls_today >= rec.daily_cloud_cap:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=429, detail="Daily cloud scoring cap reached")
+    rec.cloud_calls_today += 1

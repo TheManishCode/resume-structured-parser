@@ -23,12 +23,12 @@ from __future__ import annotations
 import copy
 from typing import Callable
 
-import schema
-import integrity
-import role_taxonomy
-import disqualifiers
-import behavioral
-import scoring
+from . import schema
+from . import integrity
+from . import role_taxonomy
+from . import disqualifiers
+from . import behavioral
+from . import scoring
 
 
 # Fields that MUST NOT influence ranking (per bias-audit requirement).

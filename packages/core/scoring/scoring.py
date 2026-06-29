@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/scoring.py
 
 Composite score assembler for the redrob-ranker pipeline.
@@ -26,9 +26,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import yaml
-import schema
+from . import schema
 
-_WEIGHTS_PATH = Path(__file__).parent.parent / "config" / "weights.yaml"
+_WEIGHTS_PATH = Path(__file__).parent / "weights.yaml"
 
 # ── Weight loading (cached at import time) ────────────────────────────────────
 
@@ -135,19 +135,16 @@ def compute_score(
 
 
 def score_candidate(candidate: dict) -> dict:
-    """Convenience wrapper: run all sub-scorers and return composite score.
-
-    This is the function rank.py calls in the hot path.
-    """
-    import integrity
-    import role_taxonomy
-    import disqualifiers
-    import behavioral
+    """Convenience wrapper: run all sub-scorers and return composite score."""
+    from . import integrity as _integ
+    from . import role_taxonomy as _tax
+    from . import disqualifiers as _dq
+    from . import behavioral as _beh
 
     return compute_score(
         candidate=candidate,
-        taxonomy_result=role_taxonomy.role_taxonomy(candidate),
-        integrity_result=integrity.integrity_check(candidate),
-        disqualifier_result=disqualifiers.disqualifier_check(candidate),
-        behavioral_result=behavioral.behavioral_score(candidate),
+        taxonomy_result=_tax.role_taxonomy(candidate),
+        integrity_result=_integ.integrity_check(candidate),
+        disqualifier_result=_dq.disqualifier_check(candidate),
+        behavioral_result=_beh.behavioral_score(candidate),
     )

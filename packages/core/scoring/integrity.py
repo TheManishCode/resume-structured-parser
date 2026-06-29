@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/integrity.py
 
 Honeypot / internal-consistency detection.
@@ -27,7 +27,7 @@ bottom of the ranking rather than being silently dropped.
 """
 from __future__ import annotations
 from datetime import date
-import schema
+from . import schema
 
 EXPERT_MIN_MONTHS = 6
 YOE_MISMATCH_THRESHOLD_MONTHS = 24

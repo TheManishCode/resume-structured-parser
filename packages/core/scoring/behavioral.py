@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/behavioral.py
 
 Candidate availability/engagement modifier from redrob_signals.
@@ -34,7 +34,7 @@ signal from collapsing the multiplier entirely).
 from __future__ import annotations
 from datetime import date
 
-import schema
+from . import schema
 
 # ── Calibration constants (from probe_behavioral.py) ─────────────────────────
 

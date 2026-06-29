@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/reasoning.py
 
 Grounded reasoning string generator for the submission CSV's `reasoning` column.
@@ -15,7 +15,7 @@ Design: template-based (no LLM at ranking time). The template selects
 branches based on actual sub-score values, not generic filler.
 """
 from __future__ import annotations
-import schema
+from . import schema
 
 # ── JD-signal term → human-readable label map ────────────────────────────────
 # Only the terms we actually use for descriptions (from role_taxonomy.DESC_TERMS)

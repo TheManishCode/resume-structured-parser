@@ -1,4 +1,4 @@
-"""
+﻿"""
 src/disqualifiers.py
 
 JD-stated disqualifier checks. One function per exclusion category.
@@ -27,7 +27,7 @@ Design:
   This means two simultaneous 0.40 penalties → 1 - (0.6 * 0.6) = 0.64 combined.
 """
 from __future__ import annotations
-import schema
+from . import schema
 
 # ── Consulting / IT-services firm list ───────────────────────────────────────
 # Patterns that identify big IT-services companies where ML work is typically

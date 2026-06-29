@@ -9,9 +9,9 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 from fastapi import APIRouter, HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 
@@ -20,10 +20,17 @@ from packages.core.db.models import Candidate, Recruiter
 
 router = APIRouter()
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET    = os.getenv("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRE  = int(os.getenv("JWT_EXPIRE_HOURS", "48"))
+
+
+def _hash(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt(rounds=12)).decode()
+
+
+def _verify(password: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 def _make_token(sub: str, role: str) -> str:
@@ -66,7 +73,7 @@ async def register_recruiter(body: RecruiterRegister, db: DbSession):
     rec = Recruiter(
         email=body.email,
         org_name=body.org_name,
-        hashed_pw=_pwd.hash(body.password),
+        hashed_pw=_hash(body.password),
     )
     db.add(rec)
     await db.flush()
@@ -78,7 +85,7 @@ async def register_candidate(body: CandidateRegister, db: DbSession):
     existing = await db.scalar(select(Candidate).where(Candidate.email == body.email))
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
-    cand = Candidate(email=body.email, hashed_pw=_pwd.hash(body.password))
+    cand = Candidate(email=body.email, hashed_pw=_hash(body.password))
     db.add(cand)
     await db.flush()
     return TokenResponse(access_token=_make_token(str(cand.id), "candidate"), role="candidate")
@@ -91,7 +98,7 @@ async def login(body: LoginRequest, db: DbSession):
     else:
         user = await db.scalar(select(Candidate).where(Candidate.email == body.email))
 
-    if not user or not _pwd.verify(body.password, user.hashed_pw):
+    if not user or not _verify(body.password, user.hashed_pw):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return TokenResponse(

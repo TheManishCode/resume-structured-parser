@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER:     postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-rixs.cx_73}"
       POSTGRES_DB:       talent_platform
     ports:
       - "5432:5432"
@@ -27,7 +27,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL:      postgresql+asyncpg://postgres:postgres@db:5432/talent_platform
+      DATABASE_URL:      "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-rixs.cx_73}@db:5432/talent_platform"
       JWT_SECRET:        "${JWT_SECRET:-change-me-in-production}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       GROQ_API_KEY:      "${GROQ_API_KEY:-}"
