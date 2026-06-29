@@ -1,0 +1,40 @@
+# config/weights.yaml
+#
+# Scoring weights for the redrob-ranker composite scorer.
+# All base_fit weights must sum to 1.0.
+#
+# Calibration history:
+#   v1 (initial): set from first-principles before manual_labels.csv exists.
+#     role_relevance weighted 0.70 as primary gate; yoe 0.30 as seniority check.
+#     Multipliers (integrity, disqualifier, behavioral) are not in base_fit sum.
+#   v2 (post-calibration): update after eval/calibrate_weights.py runs
+#     against eval/manual_labels.csv (~20-30 hand-labelled candidates).
+#
+# Change log:
+#   2026-06-29  v1 initial values (pre-calibration)
+
+version: 1
+
+base_fit:
+  role_relevance: 0.70
+  yoe_score: 0.30
+
+# YOE piecewise scoring thresholds (years of experience)
+# Calibrated against ML-adjacent pool distribution (probe_yoe.py):
+#   p10=3.4yr  p25=4.1yr  p50=5.1yr  p75=6.0yr  p90=6.7yr
+# JD targets a "Senior AI Engineer" — 5-8yr is the sweet spot.
+yoe_breakpoints:
+  - {max_years: 2.0,  score: 0.20}   # very junior
+  - {max_years: 4.0,  score: 0.55}   # junior-to-mid, below senior bar
+  - {max_years: 6.0,  score: 0.82}   # solid mid, approaching senior
+  - {max_years: 8.0,  score: 0.95}   # ideal for senior
+  - {max_years: 10.0, score: 1.00}   # exceptional experience (max at 10yr)
+  - {max_years: 99.0, score: 1.00}   # beyond 10yr: stays at 1.0
+
+# These are multipliers, not additive weights — not in the base_fit sum.
+# integrity_score and disqualifier_multiplier come from their respective modules.
+# availability_modifier comes from behavioral.py.
+multipliers:
+  integrity: true        # multiply by integrity_score (0.05 or 1.0)
+  disqualifier: true     # multiply by disqualifier_multiplier
+  availability: true     # multiply by availability_modifier
