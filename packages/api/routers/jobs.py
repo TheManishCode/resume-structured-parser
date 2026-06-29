@@ -174,6 +174,35 @@ async def ranked_shortlist(job_id: UUID, user: RecruiterUser, db: DbSession, lim
     ]
 
 
+# ── Talent suggestions (unscored candidates for this job) ────────────────────
+
+@router.get("/{job_id}/suggest")
+async def suggest_candidates(job_id: UUID, user: RecruiterUser, db: DbSession, limit: int = 10):
+    """Return resumes not yet scored for this job — quick shortlist suggestions."""
+    await _get_own_job(str(job_id), user["sub"], db)
+    from sqlalchemy import not_
+
+    already_scored = select(Score.resume_id).where(Score.job_id == str(job_id))
+    rows = (await db.scalars(
+        select(Resume)
+        .where(
+            Resume.is_expired == False,
+            not_(Resume.id.in_(already_scored)),
+        )
+        .order_by(Resume.uploaded_at.desc())
+        .limit(limit)
+    )).all()
+
+    return [
+        {
+            "resume_id":   str(r.id),
+            "uploaded_at": r.uploaded_at.isoformat(),
+            "expires_at":  r.expires_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_own_job(job_id: str, recruiter_id: str, db) -> Job:

@@ -16,14 +16,6 @@ from packages.core.db.models import Resume, Score
 router = APIRouter()
 
 
-@router.get("/{score_id}")
-async def get_score(score_id: UUID, user: RecruiterUser, db: DbSession):
-    row = await db.get(Score, str(score_id))
-    if not row:
-        raise HTTPException(status_code=404, detail="Score not found")
-    return _full_score(row)
-
-
 @router.get("/candidate/me")
 async def my_scores(user: CandidateUser, db: DbSession):
     """Candidate sees all their resume scores (for all roles they were evaluated against)."""
@@ -60,6 +52,14 @@ def _full_score(s: Score) -> dict:
         "local_confidence":  s.local_confidence,
         "scored_at":         s.scored_at.isoformat(),
     }
+
+
+@router.get("/{score_id}")
+async def get_score(score_id: UUID, user: RecruiterUser, db: DbSession):
+    row = await db.get(Score, str(score_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Score not found")
+    return _full_score(row)
 
 
 def _improvement_tip(s: Score) -> str | None:

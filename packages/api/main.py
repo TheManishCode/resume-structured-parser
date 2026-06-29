@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import date, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,12 +23,18 @@ logging.basicConfig(level=logging.INFO)
 
 _retry_queue: asyncio.Queue = asyncio.Queue()
 
+_EXPIRY_INTERVAL_SECONDS = int(os.getenv("EXPIRY_CHECK_INTERVAL_SECONDS", "3600"))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_retry_worker())
+    tasks = [
+        asyncio.create_task(_retry_worker()),
+        asyncio.create_task(_expiry_worker()),
+    ]
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
 
 
 async def _retry_worker():
@@ -55,6 +62,27 @@ async def _retry_worker():
             logging.error("Retry worker error: %s", exc)
         finally:
             _retry_queue.task_done()
+
+
+async def _expiry_worker():
+    """Mark resumes as expired once their expires_at date has passed."""
+    from sqlalchemy import update
+    from packages.core.db.session import AsyncSessionLocal
+    from packages.core.db.models import Resume
+
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                today = date.today()
+                await session.execute(
+                    update(Resume)
+                    .where(Resume.is_expired == False, Resume.expires_at < today)
+                    .values(is_expired=True)
+                )
+                await session.commit()
+        except Exception as exc:
+            logging.error("Expiry worker error: %s", exc)
+        await asyncio.sleep(_EXPIRY_INTERVAL_SECONDS)
 
 
 app = FastAPI(
