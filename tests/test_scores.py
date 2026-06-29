@@ -4,14 +4,14 @@ import pytest
 
 async def _make_recruiter(client, email="rec_scores@example.com"):
     r = await client.post("/auth/register/recruiter", json={
-        "email": email, "password": "pw", "org_name": "ScoreOrg",
+        "email": email, "password": "password1", "org_name": "ScoreOrg",
     })
     return r.json()["access_token"]
 
 
 async def _make_candidate(client, email="cand_scores@example.com"):
     r = await client.post("/auth/register/candidate", json={
-        "email": email, "password": "pw",
+        "email": email, "password": "password1",
     })
     return r.json()["access_token"]
 

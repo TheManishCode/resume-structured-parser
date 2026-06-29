@@ -120,7 +120,7 @@ _MAX_DESC_RAW: float = 0.52
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-_TODAY = date(2026, 6, 29)
+_TODAY = date.today()
 
 
 def _title_score(title: str) -> float:

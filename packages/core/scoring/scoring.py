@@ -135,16 +135,23 @@ def compute_score(
 
 
 def score_candidate(candidate: dict) -> dict:
-    """Convenience wrapper: run all sub-scorers and return composite score."""
+    """Convenience wrapper: run all sub-scorers and return composite score + reasoning."""
     from . import integrity as _integ
     from . import role_taxonomy as _tax
     from . import disqualifiers as _dq
     from . import behavioral as _beh
+    from . import reasoning as _rsn
 
-    return compute_score(
+    tax  = _tax.role_taxonomy(candidate)
+    intg = _integ.integrity_check(candidate)
+    dq   = _dq.disqualifier_check(candidate)
+    beh  = _beh.behavioral_score(candidate)
+    sc   = compute_score(
         candidate=candidate,
-        taxonomy_result=_tax.role_taxonomy(candidate),
-        integrity_result=_integ.integrity_check(candidate),
-        disqualifier_result=_dq.disqualifier_check(candidate),
-        behavioral_result=_beh.behavioral_score(candidate),
+        taxonomy_result=tax,
+        integrity_result=intg,
+        disqualifier_result=dq,
+        behavioral_result=beh,
     )
+    sc["reasoning"] = _rsn.generate_reasoning(candidate, tax, dq, beh, sc)
+    return sc

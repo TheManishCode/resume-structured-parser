@@ -5,7 +5,7 @@ import pytest
 async def _recruiter_token(client) -> str:
     r = await client.post("/auth/register/recruiter", json={
         "email": "rec_jobs@example.com",
-        "password": "pw",
+        "password": "password1",
         "org_name": "Jobs Test Org",
     })
     return r.json()["access_token"]
@@ -52,7 +52,7 @@ async def test_get_job(client):
 async def test_candidate_cannot_create_job(client):
     r = await client.post("/auth/register/candidate", json={
         "email": "cand_jobs@example.com",
-        "password": "pw",
+        "password": "password1",
     })
     token = r.json()["access_token"]
     r2 = await client.post(

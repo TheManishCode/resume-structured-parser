@@ -59,7 +59,7 @@ _WEIGHTS = {
 _MODIFIER_FLOOR = 0.2   # never collapse to zero for a bad-signal candidate
 _MODIFIER_CEIL = 1.0    # no upward boost beyond fit score
 
-_TODAY = date(2026, 6, 29)
+_TODAY = date.today()
 
 
 def _open_to_work_score(sig: dict) -> float:

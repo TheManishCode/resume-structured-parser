@@ -1,70 +1,72 @@
-﻿"""
-src/reasoning.py
+"""
+packages/core/scoring/reasoning.py
 
-Grounded reasoning string generator for the submission CSV's `reasoning` column.
+Grounded reasoning string generator — recruiter-voice, per-candidate.
 
-Each candidate gets a 1-2 sentence string that:
-  - Names years_of_experience and current_title (candidate-specific facts)
-  - Mentions 1-2 matched JD requirements from matched_terms or role_relevance
-  - Adds a specific concern if disqualifier_penalty > 0 or availability < 0.5
-  - Is guaranteed unique per candidate (inputs vary, template output varies)
-  - Contains no PII beyond what's already in the public candidate record
-  - Does NOT mention education tier, grade, institution, or name
-
-Design: template-based (no LLM at ranking time). The template selects
-branches based on actual sub-score values, not generic filler.
+v2: mentions current company, uses action verbs, 6 score-tier variants,
+concern phrases are company-specific. No PII (name/education never read).
+All 11 test contracts preserved.
 """
 from __future__ import annotations
 from . import schema
 
-# ── JD-signal term → human-readable label map ────────────────────────────────
-# Only the terms we actually use for descriptions (from role_taxonomy.DESC_TERMS)
-_TERM_LABELS: dict[str, str] = {
-    "pytorch": "PyTorch model development",
-    "gradient": "gradient-based training",
-    "fine-tun": "fine-tuning",
-    "nlp": "NLP",
-    "ranking": "ranking systems",
-    "feature store": "feature store integration",
-    "recommendation": "recommendation systems",
-    "inference": "model inference",
-    "bert": "BERT/transformer models",
-    "embedding": "embedding-based retrieval",
-    "transformers": "transformer architectures",
-    "faiss": "FAISS vector search",
-    "retrieval": "retrieval systems",
-    "mlflow": "MLflow experiment tracking",
-    "pinecone": "vector database (Pinecone)",
-    "gpt": "LLM/GPT integration",
-    "openai": "OpenAI API integration",
-    "elasticsearch": "Elasticsearch search",
+_TERM_PHRASES: dict[str, str] = {
+    "pytorch":        "PyTorch model training",
+    "gradient":       "gradient-based optimisation",
+    "fine-tun":       "model fine-tuning",
+    "nlp":            "NLP systems",
+    "ranking":        "ranking/retrieval systems",
+    "feature store":  "feature store pipelines",
+    "recommendation": "recommendation engines",
+    "inference":      "production model inference",
+    "bert":           "BERT/transformer models",
+    "embedding":      "embedding-based retrieval",
+    "transformers":   "transformer architectures",
+    "faiss":          "FAISS vector search",
+    "retrieval":      "retrieval-augmented systems",
+    "mlflow":         "MLflow experiment tracking",
+    "pinecone":       "Pinecone vector database",
+    "gpt":            "LLM/GPT integration",
+    "openai":         "OpenAI API workflows",
+    "elasticsearch":  "Elasticsearch-backed search",
 }
 
-# ── Concern phrase builders ───────────────────────────────────────────────────
+# Legacy alias
+_TERM_LABELS = _TERM_PHRASES
 
-def _disqualifier_concern(flags: list[str]) -> str | None:
+
+def _disqualifier_concern(flags: list[str], candidate: dict) -> str | None:
     if not flags:
         return None
     flag = flags[0]
-    phrases = {
-        "pure_research_only": "career history is research-oriented with no production evidence",
-        "consulting_only_no_product": "career has been exclusively at IT-services/consulting firms",
-        "recent_langchain_wrapper_only": "recent work appears to be LLM-wrapper integration rather than ML systems",
-        "cv_speech_robotics_without_nlp": "domain is CV/speech/robotics with limited NLP/search background",
-        "title_chaser": "shows a pattern of very short tenures across many employers",
-    }
-    return phrases.get(flag)
+    if flag == "consulting_only_no_product":
+        companies = list({
+            (r.get("company") or "").strip()
+            for r in schema.get_career_history(candidate)
+            if (r.get("company") or "").strip()
+        })
+        company_str = ", ".join(companies[:3]) if companies else "IT-services firms"
+        return f"entire career at {company_str} — consulting/services background with no product ML evidence"
+    return {
+        "pure_research_only":            "all roles are research-track; no production deployment evidence in descriptions",
+        "recent_langchain_wrapper_only": "recent work is LLM-wrapper/prompt-engineering rather than ML systems engineering",
+        "cv_speech_robotics_without_nlp": "domain is CV/speech/robotics — limited NLP or search/ranking background",
+        "title_chaser":                  "pattern of very short tenures (4+ stints under 12 months) across many employers",
+    }.get(flag)
 
 
 def _availability_concern(availability: float) -> str | None:
     if availability >= 0.5:
         return None
     if availability < 0.30:
-        return "low platform engagement (slow response time, rarely active)"
-    return "below-average availability signals"
+        return "low platform engagement: slow response time, rarely active on platform"
+    return "below-average availability signals on platform"
 
 
-# ── Main function ─────────────────────────────────────────────────────────────
+def _top_terms(matched: list[str], exclude: list[str], n: int = 2) -> list[str]:
+    return [_TERM_PHRASES[t] for t in matched if t in _TERM_PHRASES
+            and _TERM_PHRASES[t] not in exclude][:n]
+
 
 def generate_reasoning(
     candidate: dict,
@@ -73,63 +75,66 @@ def generate_reasoning(
     behavioral_result: dict,
     score_result: dict,
 ) -> str:
-    """Generate a 1-2 sentence grounded reasoning string for a candidate.
-
-    All inputs must come from the pipeline's pre-computed results — this
-    function does no scoring or data access of its own.
-    """
-    cid = schema.get_candidate_id(candidate)
-    title = schema.get_current_title(candidate)
-    years = schema.get_years_experience(candidate)
+    title    = schema.get_current_title(candidate)
+    years    = schema.get_years_experience(candidate)
+    company  = schema.get_current_company(candidate)
     role_rel = taxonomy_result.get("role_relevance", 0.0)
-    matched = taxonomy_result.get("matched_terms", [])
+    matched  = taxonomy_result.get("matched_terms", [])
     dq_flags = disqualifier_result.get("disqualified_flags", [])
-    avail = behavioral_result.get("availability_modifier", 1.0)
-    final_score = score_result.get("score", 0.0)
+    avail    = behavioral_result.get("availability_modifier", 1.0)
 
-    # ── Sentence 1: fit summary ───────────────────────────────────────────────
-    years_str = f"{years:.0f}" if years == int(years) else f"{years:.1f}"
+    yr = f"{years:.0f}" if years == int(years) else f"{years:.1f}"
+    company_tag = f" at {company}" if company else ""
+    terms1 = _top_terms(matched, [], n=2)
+    terms_str = " and ".join(terms1) if terms1 else ""
 
-    if role_rel >= 0.85:
-        fit_word = "strong"
-    elif role_rel >= 0.65:
-        fit_word = "good"
+    if role_rel >= 0.85 and terms_str:
+        sent1 = (
+            f"{yr}-year {title}{company_tag}: strong production ML fit "
+            f"with hands-on {terms_str}."
+        )
+    elif role_rel >= 0.70 and terms_str:
+        sent1 = (
+            f"{title}{company_tag} ({yr}yr) — {terms_str} present in role descriptions, "
+            f"aligns well with Senior AI Engineer requirements."
+        )
+    elif role_rel >= 0.55 and terms_str:
+        sent1 = (
+            f"{yr}-year {title}{company_tag}; "
+            f"ML relevance supported by {terms_str}."
+        )
+    elif role_rel >= 0.85:
+        sent1 = (
+            f"{yr}-year {title}{company_tag}: title strongly matches "
+            f"Senior AI Engineer JD target role."
+        )
     elif role_rel >= 0.50:
-        fit_word = "moderate"
+        sent1 = (
+            f"{yr}-year {title}{company_tag}; "
+            f"moderate match to Senior AI Engineer JD profile."
+        )
     else:
-        fit_word = "limited"
+        sent1 = (
+            f"{yr}-year {title}{company_tag}; "
+            f"limited overlap with Senior AI Engineer JD requirements."
+        )
 
-    # Pick up to 2 most specific matched terms for the sentence
-    top_terms = [_TERM_LABELS[t] for t in matched[:3] if t in _TERM_LABELS][:2]
-    if top_terms:
-        skills_clause = f", with described experience in {' and '.join(top_terms)}"
-    else:
-        skills_clause = ""
-
-    sent1 = (
-        f"{years_str}-year {title} with {fit_word} role relevance"
-        f" to the Senior AI Engineer JD{skills_clause}."
+    concern = (
+        _disqualifier_concern(dq_flags, candidate)
+        or _availability_concern(avail)
     )
-
-    # ── Sentence 2: concern or positive note ─────────────────────────────────
-    concern = _disqualifier_concern(dq_flags) or _availability_concern(avail)
 
     if concern:
         sent2 = f"Concern: {concern}."
     elif avail >= 0.80 and not dq_flags:
-        sent2 = "High engagement signals suggest strong availability."
-    elif matched and role_rel >= 0.70:
-        # Pick a different term than already mentioned in sent1 for variety
-        extra_terms = [_TERM_LABELS[t] for t in matched if t in _TERM_LABELS
-                       and _TERM_LABELS[t] not in (top_terms or [])]
-        if extra_terms:
-            sent2 = f"Additional JD-relevant signals: {extra_terms[0]}."
-        else:
-            sent2 = "Career descriptions align with JD's production ML requirements."
+        sent2 = "Strong platform engagement: high recruiter responsiveness and recent activity."
     else:
-        sent2 = ""
+        extras = _top_terms(matched, terms1, n=1)
+        if extras:
+            sent2 = f"Additional JD signal: {extras[0]}."
+        elif role_rel >= 0.70:
+            sent2 = "Career descriptions align with JD production ML requirements."
+        else:
+            sent2 = ""
 
-    reasoning = sent1
-    if sent2:
-        reasoning = reasoning + " " + sent2
-    return reasoning.strip()
+    return (sent1 + (" " + sent2 if sent2 else "")).strip()

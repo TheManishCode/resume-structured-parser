@@ -14,8 +14,11 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from .routers import auth, jobs, resumes, scores, candidates
 
@@ -65,7 +68,6 @@ async def _retry_worker():
 
 
 async def _expiry_worker():
-    """Mark resumes as expired once their expires_at date has passed."""
     from sqlalchemy import update
     from packages.core.db.session import AsyncSessionLocal
     from packages.core.db.models import Resume
@@ -85,12 +87,31 @@ async def _expiry_worker():
         await asyncio.sleep(_EXPIRY_INTERVAL_SECONDS)
 
 
+_limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="AI Talent Platform",
-    version="0.1.0",
+    version="0.2.0",
     description="Two-sided resume screening platform — Recruiters + Candidates",
     lifespan=lifespan,
 )
+app.state.limiter = _limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── Security headers ──────────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
+
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
 
 app.add_middleware(
     CORSMiddleware,
@@ -109,4 +130,4 @@ app.include_router(candidates.router, prefix="/candidates", tags=["candidates"])
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": app.version}

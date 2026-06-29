@@ -29,7 +29,7 @@ async def test_register_candidate(client):
 
 @pytest.mark.asyncio
 async def test_duplicate_recruiter_rejected(client):
-    payload = {"email": "dup@example.com", "password": "pw", "org_name": "X"}
+    payload = {"email": "dup@example.com", "password": "password1", "org_name": "X"}
     await client.post("/auth/register/recruiter", json=payload)
     r = await client.post("/auth/register/recruiter", json=payload)
     assert r.status_code == 409
@@ -55,11 +55,11 @@ async def test_login_recruiter(client):
 async def test_login_wrong_password(client):
     await client.post("/auth/register/candidate", json={
         "email": "wp@example.com",
-        "password": "correct",
+        "password": "correctpass",
     })
     r = await client.post("/auth/login", json={
         "email": "wp@example.com",
-        "password": "wrong",
+        "password": "wrongpass1",
         "role": "candidate",
     })
     assert r.status_code == 401

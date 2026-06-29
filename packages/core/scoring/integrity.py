@@ -63,7 +63,7 @@ def check_overlapping_roles(c: dict) -> list[str]:
     intervals = []
     for r in roles:
         sd = schema.parse_date(r.get("start_date"))
-        ed = schema.parse_date(r.get("end_date")) or date(2026, 6, 29)
+        ed = schema.parse_date(r.get("end_date")) or date.today()
         if sd:
             intervals.append((sd, ed))
     intervals.sort()
