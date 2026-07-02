@@ -29,9 +29,12 @@ services:
     environment:
       DATABASE_URL:      "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-rixs.cx_73}@db:5432/talent_platform"
       JWT_SECRET:        "${JWT_SECRET:-change-me-in-production}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      GROQ_API_KEY:      "${GROQ_API_KEY:-}"
-      OLLAMA_BASE_URL:   "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
+      ANTHROPIC_API_KEY:   "${ANTHROPIC_API_KEY:-}"
+      GROQ_API_KEY:        "${GROQ_API_KEY:-}"
+      APEKEY_AI_API_KEY:   "${APEKEY_AI_API_KEY:-}"
+      APEKEY_AI_BASE_URL:  "${APEKEY_AI_BASE_URL:-https://api.apekey.ai/v1}"
+      APEKEY_AI_MODEL:     "${APEKEY_AI_MODEL:-gpt-4o}"
+      OLLAMA_BASE_URL:     "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
       CORS_ORIGINS:      "http://localhost:5173"
     ports:
       - "8000:8000"

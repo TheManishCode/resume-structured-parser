@@ -54,6 +54,14 @@ class Recruiter(Base):
     is_active     = Column(Boolean, nullable=False, default=True)
     created_at    = Column(DateTime(timezone=True), nullable=False, default=_now)
 
+    # Profile fields
+    name            = Column(String(255), nullable=True)
+    company_website = Column(String(512), nullable=True)
+    hiring_role     = Column(String(128), nullable=True)
+    hiring_domains  = Column(JSONB, nullable=True)   # ["Engineering", "Product", ...]
+    company_size    = Column(String(32), nullable=True)  # "1-10"|"11-50"|"51-200"|etc.
+    onboarding_done = Column(Boolean, nullable=False, default=False)
+
     # Cost guardrail: cloud-model calls per org per day
     daily_cloud_cap   = Column(Integer, nullable=False, default=200)
     cloud_calls_today = Column(Integer, nullable=False, default=0)
@@ -67,13 +75,25 @@ class Recruiter(Base):
 class Candidate(Base):
     __tablename__ = "candidates"
 
-    id         = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    email      = Column(String(255), nullable=False, unique=True, index=True)
-    hashed_pw  = Column(String(255), nullable=False)
-    is_active  = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    id               = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    email            = Column(String(255), nullable=False, unique=True, index=True)
+    hashed_pw        = Column(String(255), nullable=False)
+    is_active        = Column(Boolean, nullable=False, default=True)
+    created_at       = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    # Profile fields
+    name             = Column(String(255), nullable=True)
+    phone            = Column(String(32), nullable=True)
+    location         = Column(String(255), nullable=True)
+    target_roles     = Column(JSONB, nullable=True)      # ["Software Engineer", ...]
+    experience_level = Column(String(32), nullable=True)  # entry|mid|senior|lead|exec
+    job_type_pref    = Column(JSONB, nullable=True)      # ["full-time", "remote", ...]
+    skills           = Column(JSONB, nullable=True)      # ["Python", "FastAPI", ...]
+    visibility       = Column(Boolean, nullable=False, default=True)
+    onboarding_done  = Column(Boolean, nullable=False, default=False)
 
     resumes = relationship("Resume", back_populates="candidate", cascade="all, delete-orphan")
+    analyses = relationship("AnalysisHistory", back_populates="candidate", cascade="all, delete-orphan")
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -202,6 +222,33 @@ class AuditLog(Base):
     payload      = Column(JSONB, nullable=True)                 # arbitrary detail blob
     model_used   = Column(String(64), nullable=True)
     occurred_at  = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+# ── Analysis history (public /analyze endpoint, optional auth) ─────────────────
+
+class AnalysisHistory(Base):
+    """Stores results from the public /analyze endpoint when user is logged in."""
+    __tablename__ = "analysis_history"
+
+    id                  = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    candidate_id        = Column(UUID(as_uuid=False), ForeignKey("candidates.id", ondelete="CASCADE"),
+                                 nullable=True, index=True)
+    job_title           = Column(String(255), nullable=True)
+    company             = Column(String(255), nullable=True)
+    job_url             = Column(String(1024), nullable=True)
+    overall_score       = Column(Integer, nullable=True)
+    ats_score           = Column(Integer, nullable=True)
+    keyword_match_score = Column(Integer, nullable=True)
+    skills_match_score  = Column(Integer, nullable=True)
+    experience_score    = Column(Integer, nullable=True)
+    format_score        = Column(Integer, nullable=True)
+    matched_keywords    = Column(JSONB, nullable=True)
+    missing_keywords    = Column(JSONB, nullable=True)
+    improvements        = Column(JSONB, nullable=True)
+    summary             = Column(Text, nullable=True)
+    analyzed_at         = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    candidate = relationship("Candidate", back_populates="analyses")
 
 
 # ── Guard: prevent accidental AuditLog updates via ORM ───────────────────────

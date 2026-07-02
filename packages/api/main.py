@@ -20,7 +20,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from .routers import auth, jobs, resumes, scores, candidates
+from .routers import auth, jobs, resumes, scores, candidates, analyze, candidate_dashboard, recruiter_dashboard
 
 logging.basicConfig(level=logging.INFO)
 
@@ -121,11 +121,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router,       prefix="/auth",       tags=["auth"])
-app.include_router(jobs.router,       prefix="/jobs",       tags=["jobs"])
-app.include_router(resumes.router,    prefix="/resumes",    tags=["resumes"])
-app.include_router(scores.router,     prefix="/scores",     tags=["scores"])
-app.include_router(candidates.router, prefix="/candidates", tags=["candidates"])
+app.include_router(analyze.router,               prefix="/analyze",    tags=["analyze"])
+app.include_router(auth.router,                  prefix="/auth",       tags=["auth"])
+app.include_router(candidate_dashboard.router,   prefix="/candidate",  tags=["candidate"])
+app.include_router(recruiter_dashboard.router,   prefix="/recruiter",  tags=["recruiter"])
+app.include_router(jobs.router,                  prefix="/jobs",       tags=["jobs"])
+app.include_router(resumes.router,               prefix="/resumes",    tags=["resumes"])
+app.include_router(scores.router,                prefix="/scores",     tags=["scores"])
+app.include_router(candidates.router,            prefix="/candidates", tags=["candidates"])
 
 
 @app.get("/health")

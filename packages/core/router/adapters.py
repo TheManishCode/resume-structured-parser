@@ -209,24 +209,98 @@ class GroqAdapter(CloudModel):
         }
 
 
+# ── ApeKey.ai (unified AI gateway) ───────────────────────────────────────────
+
+class ApeKeyAdapter(CloudModel):
+    """ApeKey.ai unified AI API gateway — OpenAI-compatible endpoint.
+
+    Provides access to multiple LLM providers through a single API key.
+    Acts as primary cloud tier when APEKEY_AI_API_KEY is set.
+    """
+
+    DEFAULT_BASE_URL = "https://api.apekey.ai/v1"
+    DEFAULT_MODEL    = "gpt-4o"
+
+    def __init__(
+        self,
+        api_key:  str | None = None,
+        base_url: str | None = None,
+        model:    str | None = None,
+    ) -> None:
+        self._api_key  = api_key  or os.getenv("APEKEY_AI_API_KEY", "")
+        self._base_url = (base_url or os.getenv("APEKEY_AI_BASE_URL", self.DEFAULT_BASE_URL)).rstrip("/")
+        self._model    = model    or os.getenv("APEKEY_AI_MODEL", self.DEFAULT_MODEL)
+        if not self._api_key:
+            logger.warning("APEKEY_AI_API_KEY not set — ApeKeyAdapter will fail at runtime")
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    def is_available(self) -> bool:
+        return bool(self._api_key)
+
+    async def score(
+        self, resume_text: str, job_description: str, local_result: dict | None = None
+    ) -> dict:
+        prompt = _build_prompt(resume_text, job_description, local_result)
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type":  "application/json",
+        }
+        payload = {
+            "model": self._model,
+            "messages": [
+                {
+                    "role":    "system",
+                    "content": "You are an expert technical recruiter. Respond with JSON only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature":     0.1,
+            "max_tokens":      512,
+            "response_format": {"type": "json_object"},
+        }
+        resp = await self._client.post(
+            f"{self._base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+        )
+        resp.raise_for_status()
+        text   = resp.json()["choices"][0]["message"]["content"].strip()
+        parsed = json.loads(text)
+        return {
+            "score":         float(parsed["score"]),
+            "justification": str(parsed["justification"]),
+        }
+
+
 # ── Factory ───────────────────────────────────────────────────────────────────
 
 def build_router(retry_queue=None):
     """Build a ModelRouter from environment variables.
 
-    Raises ValueError if neither Claude nor Groq keys are set
-    (can't do cloud escalation with no cloud tier).
+    Priority:
+      primary  — ApeKey.ai if key set, else Claude
+      fallback — Groq
+
+    Raises ValueError if no cloud tier is configured.
     """
     from .router import ModelRouter
 
-    local    = OllamaAdapter()
-    primary  = ClaudeAdapter()
+    local = OllamaAdapter()
+
+    apekey = ApeKeyAdapter()
+    if apekey.is_available():
+        primary = apekey
+        logger.info("ModelRouter: ApeKey.ai selected as primary cloud tier")
+    else:
+        primary = ClaudeAdapter()
+        logger.info("ModelRouter: Claude selected as primary cloud tier")
+
     fallback = GroqAdapter()
 
     if not primary.is_available() and not fallback.is_available():
         raise ValueError(
-            "Neither ANTHROPIC_API_KEY nor GROQ_API_KEY are set. "
-            "At least one cloud tier is required."
+            "No cloud tier configured. Set APEKEY_AI_API_KEY, ANTHROPIC_API_KEY, "
+            "or GROQ_API_KEY."
         )
 
     return ModelRouter(local=local, primary=primary, fallback=fallback,

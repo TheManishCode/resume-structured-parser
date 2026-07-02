@@ -51,9 +51,14 @@ def _make_token(sub: str, role: str) -> str:
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class RecruiterRegister(BaseModel):
-    email:    EmailStr
-    password: str
-    org_name: str
+    email:          EmailStr
+    password:       str
+    org_name:       str
+    name:           str | None = None
+    company_website: str | None = None
+    hiring_role:    str | None = None
+    hiring_domains: list[str] | None = None
+    company_size:   str | None = None
 
     @field_validator("password")
     @classmethod
@@ -71,8 +76,15 @@ class RecruiterRegister(BaseModel):
 
 
 class CandidateRegister(BaseModel):
-    email:    EmailStr
-    password: str
+    email:           EmailStr
+    password:        str
+    name:            str | None = None
+    phone:           str | None = None
+    location:        str | None = None
+    target_roles:    list[str] | None = None
+    experience_level: str | None = None
+    job_type_pref:   list[str] | None = None
+    skills:          list[str] | None = None
 
     @field_validator("password")
     @classmethod
@@ -96,9 +108,13 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type:   str = "bearer"
-    role:         str
+    access_token:    str
+    token_type:      str = "bearer"
+    role:            str
+    user_id:         str
+    email:           str
+    name:            str | None = None
+    onboarding_done: bool = False
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -113,10 +129,23 @@ async def register_recruiter(request: Request, body: RecruiterRegister, db: DbSe
         email=body.email,
         org_name=body.org_name,
         hashed_pw=_hash(body.password),
+        name=body.name,
+        company_website=body.company_website,
+        hiring_role=body.hiring_role,
+        hiring_domains=body.hiring_domains,
+        company_size=body.company_size,
+        onboarding_done=bool(body.name and body.hiring_role),
     )
     db.add(rec)
     await db.flush()
-    return TokenResponse(access_token=_make_token(str(rec.id), "recruiter"), role="recruiter")
+    return TokenResponse(
+        access_token=_make_token(str(rec.id), "recruiter"),
+        role="recruiter",
+        user_id=str(rec.id),
+        email=rec.email,
+        name=rec.name,
+        onboarding_done=rec.onboarding_done,
+    )
 
 
 @router.post("/register/candidate", response_model=TokenResponse, status_code=201)
@@ -125,10 +154,28 @@ async def register_candidate(request: Request, body: CandidateRegister, db: DbSe
     existing = await db.scalar(select(Candidate).where(Candidate.email == body.email))
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
-    cand = Candidate(email=body.email, hashed_pw=_hash(body.password))
+    cand = Candidate(
+        email=body.email,
+        hashed_pw=_hash(body.password),
+        name=body.name,
+        phone=body.phone,
+        location=body.location,
+        target_roles=body.target_roles,
+        experience_level=body.experience_level,
+        job_type_pref=body.job_type_pref,
+        skills=body.skills,
+        onboarding_done=bool(body.name and body.skills),
+    )
     db.add(cand)
     await db.flush()
-    return TokenResponse(access_token=_make_token(str(cand.id), "candidate"), role="candidate")
+    return TokenResponse(
+        access_token=_make_token(str(cand.id), "candidate"),
+        role="candidate",
+        user_id=str(cand.id),
+        email=cand.email,
+        name=cand.name,
+        onboarding_done=cand.onboarding_done,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -145,4 +192,14 @@ async def login(request: Request, body: LoginRequest, db: DbSession):
     return TokenResponse(
         access_token=_make_token(str(user.id), body.role),
         role=body.role,
+        user_id=str(user.id),
+        email=user.email,
+        name=getattr(user, "name", None),
+        onboarding_done=getattr(user, "onboarding_done", False),
     )
+
+
+@router.post("/forgot-password")
+async def forgot_password(email: str, db: DbSession):
+    """Placeholder for email verification flow — structure ready for SMTP integration."""
+    return {"message": "If that email exists, a reset link has been sent."}
